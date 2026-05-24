@@ -371,9 +371,21 @@ input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
   <div class="panel">
     <div class="panel-header">
       <div class="panel-title">
-        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>เกี่ยวกับแอป
+        <svg viewBox="0 0 24 24"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>Anthropic API Key
       </div>
     </div>
+    <div class="panel-body">
+      <p style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:10px">ใช้สำหรับฟีเจอร์ <strong>อ่านสลิปอัตโนมัติ</strong> · เก็บในเครื่องคุณเท่านั้น ไม่ส่งไปที่อื่น<br>รับ API Key ได้ที่ <a href="https://console.anthropic.com" target="_blank" style="color:var(--blue)">console.anthropic.com</a></p>
+      <div class="field-group"><label>API Key</label><input type="password" id="apiKeyInput" placeholder="sk-ant-..." autocomplete="off" style="font-family:monospace;font-size:13px"></div>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button class="btn btn-primary" style="flex:1" onclick="saveApiKey()">
+          <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/></svg>บันทึก Key
+        </button>
+        <button class="btn btn-danger" onclick="clearApiKey()">ลบ Key</button>
+      </div>
+      <div id="apiKeyStatus" style="margin-top:8px;font-size:12px;color:var(--text3)"></div>
+    </div>
+  </div>
     <div class="panel-body" style="font-size:13.5px;color:var(--text2);line-height:2">
       <p>🔥 ซิงค์ข้อมูลผ่าน Firebase Realtime Database</p>
       <p>📱 รองรับมือถือ (iOS/Android), iPad, และ Desktop</p>
@@ -705,11 +717,25 @@ window.clearSlip=function(){
 async function analyzeSlip(){
   const statusEl=document.getElementById('slipStatus');
   statusEl.style.display='block';
+
+  // Get or prompt for API key
+  let apiKey=localStorage.getItem('anthropic_api_key')||'';
+  if(!apiKey){
+    apiKey=prompt('กรุณาใส่ Anthropic API Key เพื่อใช้ฟีเจอร์อ่านสลิป\n(เก็บในเครื่องคุณเท่านั้น ไม่ส่งที่ไหน)\n\nรับ API Key ได้ที่: console.anthropic.com','');
+    if(!apiKey){statusEl.innerHTML=`<div class="slip-error">⚠️ ยังไม่ได้ใส่ API Key</div>`;return;}
+    localStorage.setItem('anthropic_api_key',apiKey.trim());
+  }
+
   statusEl.innerHTML=`<div class="slip-reading"><span class="mini-spin"></span>AI กำลังอ่านสลิป...</div>`;
   try{
     const resp=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
-      headers:{'Content-Type':'application/json'},
+      headers:{
+        'Content-Type':'application/json',
+        'x-api-key':apiKey.trim(),
+        'anthropic-version':'2023-06-01',
+        'anthropic-dangerous-request-origin':'budget-tracker'
+      },
       body:JSON.stringify({
         model:'claude-sonnet-4-20250514',
         max_tokens:400,
@@ -724,6 +750,17 @@ async function analyzeSlip(){
         }]
       })
     });
+
+    if(resp.status===401){
+      localStorage.removeItem('anthropic_api_key');
+      statusEl.innerHTML=`<div class="slip-error">⚠️ API Key ไม่ถูกต้อง — ลบแล้ว กรุณาลองใหม่</div>`;
+      return;
+    }
+    if(!resp.ok){
+      statusEl.innerHTML=`<div class="slip-error">⚠️ เกิดข้อผิดพลาด (${resp.status}) กรุณาลองใหม่</div>`;
+      return;
+    }
+
     const data=await resp.json();
     const text=data.content?.find(c=>c.type==='text')?.text||'';
     let parsed;
@@ -737,7 +774,6 @@ async function analyzeSlip(){
     // Fill in the form
     if(parsed.amount&&parsed.amount>0){
       document.getElementById('txAmt').value=parsed.amount;
-      // Auto-set to expense
       txType='expense';
       window.setTxType('expense');
     }
@@ -752,7 +788,32 @@ async function analyzeSlip(){
   }
 }
 
-window.setFilter=function(f){
+window.saveApiKey=function(){
+  const k=document.getElementById('apiKeyInput').value.trim();
+  if(!k){toast('กรุณาใส่ API Key');return;}
+  if(!k.startsWith('sk-')){toast('API Key ไม่ถูกต้อง (ต้องขึ้นต้นด้วย sk-)');return;}
+  localStorage.setItem('anthropic_api_key',k);
+  document.getElementById('apiKeyInput').value='';
+  document.getElementById('apiKeyStatus').textContent='✅ บันทึก API Key เรียบร้อย';
+  toast('บันทึก API Key เรียบร้อย ✓');
+};
+window.clearApiKey=function(){
+  localStorage.removeItem('anthropic_api_key');
+  document.getElementById('apiKeyInput').value='';
+  document.getElementById('apiKeyStatus').textContent='🗑 ลบ API Key แล้ว';
+  toast('ลบ API Key เรียบร้อย');
+};
+
+// Load API key status on settings page open
+const _origGoPage=window.goPage;
+window.goPage=function(p){
+  _origGoPage(p);
+  if(p==='settings'){
+    const has=!!localStorage.getItem('anthropic_api_key');
+    const el=document.getElementById('apiKeyStatus');
+    if(el)el.textContent=has?'✅ มี API Key บันทึกอยู่แล้ว':'ยังไม่มี API Key';
+  }
+};
   filter=f;
   document.querySelectorAll('.filter-tab').forEach(b=>b.classList.toggle('active',b.dataset.filter===f));
   renderList();
