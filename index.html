@@ -47,6 +47,17 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);min
 .topbar-month button:active{transform:scale(.9)}
 .month-label{font-weight:700;font-size:14px;color:var(--text);min-width:108px;text-align:center}
 
+/* DESKTOP TOP NAV TABS */
+.desktop-nav{display:none}
+@media(min-width:900px){
+  .desktop-nav{display:flex;align-items:center;gap:4px}
+  .desktop-nav-btn{display:flex;align-items:center;gap:7px;height:36px;padding:0 16px;border:none;background:transparent;font-size:14px;font-family:'Sarabun',sans-serif;font-weight:600;color:var(--text2);border-radius:8px;cursor:pointer;transition:all .15s;white-space:nowrap}
+  .desktop-nav-btn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;flex-shrink:0}
+  .desktop-nav-btn:hover{background:var(--surface2);color:var(--text)}
+  .desktop-nav-btn.active{background:var(--green-bg);color:var(--green-dark)}
+  .desktop-nav-divider{width:1px;height:22px;background:var(--border);margin:0 6px}
+}
+
 /* PAGES */
 .page{display:none;padding-bottom:calc(68px + var(--safe-bottom) + 0.5rem)}
 .page.active{display:block}
@@ -218,6 +229,14 @@ input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
     </div>
     <span>บัญชีรายรับ-รายจ่าย</span>
   </div>
+  <nav class="desktop-nav">
+    <button class="desktop-nav-btn active" id="desktopNavHome" onclick="goPage('home')">
+      <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>หน้าหลัก
+    </button>
+    <button class="desktop-nav-btn" id="desktopNavSettings" onclick="goPage('settings')">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>ตั้งค่า
+    </button>
+  </nav>
   <div class="topbar-month">
     <button onclick="changeMonth(-1)">&#8249;</button>
     <span class="month-label" id="monthLabel">–</span>
@@ -464,6 +483,10 @@ window.goPage=function(p){
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   const nb=document.getElementById('nav'+p[0].toUpperCase()+p.slice(1));
   if(nb)nb.classList.add('active');
+  // sync desktop nav tabs
+  document.querySelectorAll('.desktop-nav-btn').forEach(b=>b.classList.remove('active'));
+  const dnb=document.getElementById('desktopNav'+p[0].toUpperCase()+p.slice(1));
+  if(dnb)dnb.classList.add('active');
   if(p==='settings')renderChart();
 };
 
