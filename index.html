@@ -205,6 +205,23 @@ input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
 ::-webkit-scrollbar{width:4px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+
+/* SLIP UPLOAD */
+.slip-divider{display:flex;align-items:center;gap:10px;margin:12px 0;color:var(--text3);font-size:12px}
+.slip-divider::before,.slip-divider::after{content:'';flex:1;height:1px;background:var(--border)}
+.slip-upload-area{border:2px dashed var(--border2);border-radius:var(--radius-lg);padding:18px 12px;text-align:center;cursor:pointer;transition:all .2s;position:relative;background:var(--surface2)}
+.slip-upload-area:hover,.slip-upload-area.drag{border-color:var(--green);background:var(--green-bg)}
+.slip-upload-area input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.slip-upload-area svg{width:28px;height:28px;stroke:var(--text3);fill:none;stroke-width:1.5;margin-bottom:6px}
+.slip-upload-area p{font-size:13px;color:var(--text2);font-weight:500}
+.slip-upload-area small{font-size:11px;color:var(--text3)}
+.slip-preview{position:relative;border-radius:var(--radius);overflow:hidden;margin-top:8px}
+.slip-preview img{width:100%;max-height:180px;object-fit:cover;border-radius:var(--radius);display:block}
+.slip-preview-remove{position:absolute;top:6px;right:6px;width:28px;height:28px;border-radius:50%;background:rgba(0,0,0,.6);border:none;color:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1}
+.slip-reading{background:var(--blue-bg);border:1px solid #B5D4F4;border-radius:var(--radius);padding:10px 14px;font-size:13px;color:var(--blue-dark);display:flex;align-items:center;gap:8px;margin-top:8px}
+.slip-reading .mini-spin{width:14px;height:14px;border:2px solid #B5D4F4;border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
+.slip-result{background:var(--green-bg);border:1px solid #9FE1CB;border-radius:var(--radius);padding:10px 14px;font-size:13px;color:var(--green-dark);margin-top:8px;line-height:1.7}
+.slip-error{background:var(--red-bg);border:1px solid #F5B8A5;border-radius:var(--radius);padding:10px 14px;font-size:13px;color:var(--red-dark);margin-top:8px}
 </style>
 </head>
 <body>
@@ -405,6 +422,21 @@ input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
       <div class="field-group"><label>จำนวนเงิน (บาท)</label><input type="number" id="txAmt" placeholder="0" min="0" inputmode="decimal"></div>
       <div class="field-group"><label>วันที่</label><input type="date" id="txDate"></div>
     </div>
+
+    <div class="slip-divider">หรืออัปโหลดสลิปให้ AI อ่านยอด</div>
+    <div class="slip-upload-area" id="slipUploadArea" ondragover="slipDragOver(event)" ondragleave="slipDragLeave()" ondrop="slipDrop(event)">
+      <input type="file" id="slipFileInput" accept="image/*" onchange="handleSlipFile(event)">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+      <p>แตะหรือลากรูปสลิปมาวาง</p>
+      <small>รองรับ JPG, PNG, HEIC</small>
+    </div>
+    <div id="slipPreviewWrap" style="display:none">
+      <div class="slip-preview">
+        <img id="slipPreviewImg" src="" alt="slip">
+        <button class="slip-preview-remove" onclick="clearSlip()">×</button>
+      </div>
+    </div>
+    <div id="slipStatus" style="display:none"></div>
     <button class="btn btn-primary btn-full" onclick="addTx()">
       <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>เพิ่มรายการ
     </button>
@@ -496,7 +528,7 @@ window.changeMonth=function(d){
 
 // MODALS
 window.openAddModal=function(){document.getElementById('addModal').classList.add('open');setTimeout(()=>document.getElementById('txDesc').focus(),120)};
-window.closeAddModal=function(){document.getElementById('addModal').classList.remove('open')};
+window.closeAddModal=function(){document.getElementById('addModal').classList.remove('open');window.clearSlip();};
 window.openClearModal=function(){document.getElementById('clearModal').classList.add('open')};
 window.closeClearModal=function(){document.getElementById('clearModal').classList.remove('open')};
 
@@ -623,7 +655,7 @@ async function doAdd(desc,amt,date){
 }
 window.addTx=async function(){
   const ok=await doAdd(document.getElementById('txDesc').value.trim(),parseFloat(document.getElementById('txAmt').value)||0,document.getElementById('txDate').value);
-  if(ok){document.getElementById('txDesc').value='';document.getElementById('txAmt').value='';closeAddModal();}
+  if(ok){document.getElementById('txDesc').value='';document.getElementById('txAmt').value='';window.clearSlip();closeAddModal();}
 };
 window.addTxDesktop=async function(){
   const ok=await doAdd(document.getElementById('txDescD').value.trim(),parseFloat(document.getElementById('txAmtD').value)||0,document.getElementById('txDateD').value);
@@ -638,6 +670,87 @@ window.clearAll=async function(){
   if(Object.keys(upd).length)await update(ref(db),upd);
   closeClearModal();toast('ล้างรายการเรียบร้อย');
 };
+
+// ── SLIP READING ──────────────────────────────────────────
+let slipBase64=null,slipMime=null;
+
+window.slipDragOver=function(e){e.preventDefault();document.getElementById('slipUploadArea').classList.add('drag')};
+window.slipDragLeave=function(){document.getElementById('slipUploadArea').classList.remove('drag')};
+window.slipDrop=function(e){e.preventDefault();document.getElementById('slipUploadArea').classList.remove('drag');const f=e.dataTransfer.files[0];if(f&&f.type.startsWith('image/'))readSlipFile(f)};
+window.handleSlipFile=function(e){const f=e.target.files[0];if(f)readSlipFile(f)};
+
+function readSlipFile(file){
+  const reader=new FileReader();
+  reader.onload=function(e){
+    const dataUrl=e.target.result;
+    slipMime=file.type||'image/jpeg';
+    slipBase64=dataUrl.split(',')[1];
+    document.getElementById('slipPreviewImg').src=dataUrl;
+    document.getElementById('slipPreviewWrap').style.display='block';
+    document.getElementById('slipUploadArea').style.display='none';
+    analyzeSlip();
+  };
+  reader.readAsDataURL(file);
+}
+
+window.clearSlip=function(){
+  slipBase64=null;slipMime=null;
+  document.getElementById('slipPreviewWrap').style.display='none';
+  document.getElementById('slipUploadArea').style.display='block';
+  document.getElementById('slipUploadArea').classList.remove('drag');
+  document.getElementById('slipFileInput').value='';
+  document.getElementById('slipStatus').style.display='none';
+};
+
+async function analyzeSlip(){
+  const statusEl=document.getElementById('slipStatus');
+  statusEl.style.display='block';
+  statusEl.innerHTML=`<div class="slip-reading"><span class="mini-spin"></span>AI กำลังอ่านสลิป...</div>`;
+  try{
+    const resp=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:400,
+        messages:[{
+          role:'user',
+          content:[
+            {type:'image',source:{type:'base64',media_type:slipMime,data:slipBase64}},
+            {type:'text',text:`นี่คือสลิปการโอนเงินหรือใบเสร็จ กรุณาอ่านข้อมูลและตอบเป็น JSON เท่านั้น ไม่มี markdown ไม่มีข้อความอื่น:
+{"amount": <จำนวนเงิน เป็นตัวเลขทศนิยม ไม่มี comma ไม่มี ฿>, "desc": "<รายละเอียด เช่น ร้านค้า หรือประเภท ภาษาไทย ไม่เกิน 30 ตัวอักษร>", "date": "<วันที่ รูปแบบ YYYY-MM-DD ถ้าไม่มีให้ใส่ null>"}
+ถ้าอ่านยอดเงินไม่ได้ให้ตอบ {"error": "อ่านยอดเงินไม่ได้"}`}
+          ]
+        }]
+      })
+    });
+    const data=await resp.json();
+    const text=data.content?.find(c=>c.type==='text')?.text||'';
+    let parsed;
+    try{parsed=JSON.parse(text.trim());}catch{parsed=null;}
+
+    if(!parsed||parsed.error){
+      statusEl.innerHTML=`<div class="slip-error">⚠️ ${parsed?.error||'อ่านสลิปไม่ได้ กรุณากรอกข้อมูลเอง'}</div>`;
+      return;
+    }
+
+    // Fill in the form
+    if(parsed.amount&&parsed.amount>0){
+      document.getElementById('txAmt').value=parsed.amount;
+      // Auto-set to expense
+      txType='expense';
+      window.setTxType('expense');
+    }
+    if(parsed.desc&&!document.getElementById('txDesc').value)
+      document.getElementById('txDesc').value=parsed.desc;
+    if(parsed.date&&parsed.date!=='null'&&parsed.date!==null)
+      document.getElementById('txDate').value=parsed.date;
+
+    statusEl.innerHTML=`<div class="slip-result">✅ อ่านสลิปได้ · ยอด <strong>${parsed.amount?'฿'+Number(parsed.amount).toLocaleString('th-TH'):'–'}</strong>${parsed.desc?' · '+parsed.desc:''}<br><span style="font-size:11px;color:var(--green-dark)">ตรวจสอบข้อมูลก่อนกด เพิ่มรายการ</span></div>`;
+  }catch(err){
+    statusEl.innerHTML=`<div class="slip-error">⚠️ เกิดข้อผิดพลาด: ${err.message}</div>`;
+  }
+}
 
 window.setFilter=function(f){
   filter=f;
