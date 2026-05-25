@@ -552,7 +552,18 @@ function setSyncStatus(s,msg){
 }
 
 function startListeners(){
+  // Timeout fallback — show app after 8s even if Firebase hasn't responded
+  const loadingEl=document.getElementById('loadingScreen');
+  const fallbackTimer=setTimeout(()=>{
+    if(loadingEl.style.display!=='none'){
+      loadingEl.style.display='none';
+      setSyncStatus('err','เชื่อมต่อช้า — ใช้งานแบบออฟไลน์');
+      renderAll();
+    }
+  },8000);
+
   onValue(ref(db,'settings'),snap=>{
+    clearTimeout(fallbackTimer);
     if(snap.exists()){
       settings=snap.val();
       document.getElementById('salaryAmount').value=settings.amount||'';
@@ -560,8 +571,13 @@ function startListeners(){
       updateSalaryDisplay();
     }
     setSyncStatus('ok','ซิงค์แล้ว · real-time');
-    document.getElementById('loadingScreen').style.display='none';
-  },err=>{setSyncStatus('err','เชื่อมต่อไม่ได้');document.getElementById('loadingScreen').style.display='none'});
+    loadingEl.style.display='none';
+  },err=>{
+    clearTimeout(fallbackTimer);
+    setSyncStatus('err','เชื่อมต่อไม่ได้');
+    loadingEl.style.display='none';
+    renderAll();
+  });
   onValue(ref(db,'transactions'),snap=>{
     transactions=snap.exists()?snap.val():{};
     autoInjectSalary();renderAll();
